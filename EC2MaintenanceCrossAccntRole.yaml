@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template for Cross account role for EC2Maintenance Scheduler
+
+Parameters:
+
+  ArnOfMasterRole:
+    Type: String
+    Default: ''
+    Description: Arn of the Master account IAM role
+Resources:
+  CrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Statement1
+            Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+              AWS: !Ref ArnOfMasterRole
+            Action: sts:AssumeRole
+      Description: Role to be assumed by EC2Maintenance scheduler master role
+      Policies: 
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: VisualEditor0
+                Effect: Allow
+                Action:
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                Resource: '*'
+              - Sid: VisualEditor1
+                Effect: Allow
+                Action:
+                  - ssm:DescribeAutomationExecutions
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
+                Resource: '*'
+              - Sid: VisualEditor2
+                Effect: Allow
+                Action:
+                  - ssm:GetAutomationExecution
+                  - iam:PassRole
+                  - ssm:DescribeAutomationStepExecutions
+                  - ssm:StartAutomationExecution
+                Resource:
+                  - arn:aws:iam::*:role/EC2MaintenanceCrossAcc*
+                  - arn:aws:ssm:*:*:automation-definition/AWS-RestartEC2Instance:*
+                  - arn:aws:ssm:*:*:automation-execution/*
+          PolicyName: EC2MaintenanceSchedulerCrossAccntInlPol
+      RoleName: EC2MaintenanceCrossAccRole
+      Tags: 
+        - Key: Owner
+          Value: jayarag.v@spglobal.com
