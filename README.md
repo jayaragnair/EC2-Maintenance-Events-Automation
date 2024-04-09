@@ -37,7 +37,7 @@ To automate the stop and start of EC2 instances at specified time for EC2 mainte
  
 >>SNS Topic
 
- If there is any execution of EC2 stop and start through SSM done, it will trigger this SNS topic wich will send email to WIPRO_CLOUD_OPERATIONS@spglobal.com.
+ If there is any execution of EC2 stop and start through SSM done, it will trigger this SNS topic wich will send email to jayaragnair@gmail.com.
  
  
  >>IAM Role
