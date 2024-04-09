@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 Maintenance scheduler
+
+Parameters:
+  CreateLambdaRole:
+    Type: String
+    Description: Do you need to create an IAM role for lambda?
+    AllowedValues:
+      - Yes
+      - No
+  IAMRoleArn:
+    Type: String
+    Description: "Existing role for maintenance events -Required only if you give no on CreateLambdaRole parameter."
+
+  DynamoDBName:
+    Type: String
+    Default: "EC2MaintenanceEvents"
+    Description: "DB for storing details of EC2 maintenance events"
+  FrequencyOfEvent:
+    Description: Schedule rate for eventbridge to start lambda
+    Type: String
+    Default: rate(1 minute)
+    AllowedValues:
+      - rate(1 minute)
+      - rate(5 minutes)
+      - rate(15 minutes)
+      - rate(30 minutes)
+      - rate(1 hour)
+  S3BucketName:
+    Description: S3 bucket for importing lambda code and initial dynamodb values
+    Type: String
+  LambdaS3Filename:
+    Description: S3 filename of lambda_code.zip
+    Type: String
+  DynamodbS3Filename:
+    Description: S3 filename of initial dynamodbvalues.csv
+    Type: String
+
+Conditions:
+  CreateIAMRoleForLambda: !Equals
+    - !Ref CreateLambdaRole
+    - Yes
+    
+
+Resources:
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      DisplayName: EC2MaintenanceScheduleTopic1
+      Subscription:  
+      - Endpoint: jayarag.v@spglobal.com
+        Protocol: email
+      TopicName: EC2MaintenanceScheduleTopic1
+      Tags:
+        - Key: Owner
+          Value: jayarag.v@spglobal.com
+  
+  DynamoDB:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions: 
+        - AttributeName: instance-id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: instance-id
+          KeyType: HASH
+      TableClass: STANDARD
+      TableName: !Ref DynamoDBName
+      ImportSourceSpecification:
+        InputFormat: CSV
+        S3BucketSource:
+          S3Bucket: !Ref S3BucketName
+          S3KeyPrefix: !Ref DynamodbS3Filename
+      Tags: 
+        - Key: Owner
+          Value: jayarag.v@spglobal.com
+
+  LambdaIAMRole:
+    Type : AWS::IAM::Role
+    Condition: CreateIAMRoleForLambda
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+            - Effect: Allow
+              Principal:
+                  Service:
+                      - lambda.amazonaws.com
+              Action: 'sts:AssumeRole'
+
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+              - Sid: VisualEditor0
+                Effect: Allow
+                Action:
+                    - ec2:DescribeInstances
+                    - ec2:StartInstances
+                    - dynamodb:ListTables
+                    - ec2:DescribeRegions
+                    - sns:ListTopics
+                    - ssm:ListDocuments
+                    - sns:ListSubscriptions
+                    - ec2:StopInstances
+                    - ec2:DescribeInstanceStatus
+                Resource: '*'
+              - Sid: VisualEditor1
+                Effect: Allow
+                Action:
+                    - ssm:SendCommand
+                    - ssm:ResumeSession
+                    - ssm:ListDocumentVersions
+                    - ssm:DescribeDocument
+                    - dynamodb:DeleteItem
+                    - ssm:SendAutomationSignal
+                    - dynamodb:Scan
+                    - ssm:StartSession
+                    - sts:AssumeRole
+                    - sns:Publish
+                    - ssm:StartAutomationExecution
+                    - dynamodb:DescribeTable
+                    - ssm:GetDocument
+                Resource:
+                    - !GetAtt SNSTopic.TopicArn
+                    - arn:aws:ec2:*:*:instance/*
+                    - arn:aws:ssm:*:*:session/*
+                    - arn:aws:ssm:us-east-1:*:document/AWS-RestartEC2Instance
+                    - arn:aws:ssm:*:*:automation-execution/*
+                    - arn:aws:ssm:*:*:*/AWS-RestartEC2Instance:*
+                    - arn:aws:iam::*:role/EC2MaintenanceCrossAccRole
+                    - !GetAtt DynamoDB.Arn
+                    - !Join ['/',[!GetAtt DynamoDB.Arn, '*']]
+
+        PolicyName: EC2MaintenanceInlPol
+      Tags:
+        - Key: Owner
+          Value: jayarag.v@spglobal.com
+  
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+      Code: 
+        S3Bucket: !Ref S3BucketName
+        S3Key: !Ref LambdaS3Filename
+      Description: String
+      Environment: 
+        Variables:
+          CrossAccountRoleName: EC2MaintenanceCrossAccRole
+          DynamoDBName: !Ref DynamoDBName
+          SNSTopicARN: !GetAtt SNSTopic.TopicArn
+      FunctionName: EC2MaintenanceScheduler
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      PackageType: Zip
+      Role: !If [CreateIAMRoleForLambda, !GetAtt LambdaIAMRole.Arn, !Ref IAMRoleArn]
+      Runtime: python3.9
+      Tags: 
+        - Key: Owner
+          Value: jayarag.v@spglobal.com
+      Timeout: 10
+  
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: EventbridgeRule
+      Name: EC2MaintenanceScheduledEvents
+      ScheduleExpression: !Ref FrequencyOfEvent
+      State: ENABLED
+      Targets: 
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: MaintenanceEC2Lambda
+
+  LambdaInvokePermissions:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventRule.Arn
+
+
+Outputs:
+  SNSTopicARN:
+    Description: ARN of SNS
+    Value: !GetAtt SNSTopic.TopicArn
