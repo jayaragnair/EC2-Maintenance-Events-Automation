@@ -1,7 +1,7 @@
 # EC2-MaintenanceEvents
 To automate the stop and start of EC2 instances at specified time for EC2 maintenance events
 
-![alt text](https://github.cicd.spglobal.com/jayarag-v/EC2-MaintenanceEvents/blob/adf54a5ea1be52bd90b23798d6867f1b325c4702/Architecture%20diagram.png)
+![alt text]()
 
 
 
