@@ -1,0 +1,2 @@
+instance-id,region,account-id,date,time
+<instance-id>,<region>,<account-id>,<date in UTC : YYYY-MM-DD>,<time in UTC - HH:MM>
