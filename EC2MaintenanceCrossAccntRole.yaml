@@ -53,4 +53,4 @@ Resources:
       RoleName: EC2MaintenanceCrossAccRole
       Tags: 
         - Key: Owner
-          Value: jayarag.v@spglobal.com
+          Value: jayarag.v@gmail.com
